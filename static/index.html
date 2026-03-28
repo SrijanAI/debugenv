@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DebugEnv — Train AI to Debug</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080b0f;
+    --bg2: #0d1117;
+    --bg3: #161b22;
+    --border: #21262d;
+    --green: #3fb950;
+    --green-dim: #1a4a25;
+    --amber: #e3b341;
+    --amber-dim: #4a3a10;
+    --red: #f85149;
+    --red-dim: #4a1a18;
+    --blue: #58a6ff;
+    --blue-dim: #1a3a5c;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --mono: 'JetBrains Mono', monospace;
+    --display: 'Syne', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* ── HERO ────────────────────────────────────── */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 80px 60px;
+    position: relative;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .hero::after {
+    content: '';
+    position: absolute;
+    top: -200px; right: -200px;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(63,185,80,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .tag-line {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--green);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .tag-line::before {
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 1px;
+    background: var(--green);
+  }
+
+  .hero h1 {
+    font-family: var(--display);
+    font-size: clamp(42px, 7vw, 96px);
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    margin-bottom: 32px;
+    max-width: 800px;
+  }
+
+  .hero h1 span {
+    color: var(--green);
+    position: relative;
+  }
+
+  .hero-sub {
+    font-size: 15px;
+    color: var(--muted);
+    max-width: 520px;
+    line-height: 1.8;
+    margin-bottom: 48px;
+  }
+
+  .hero-sub strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 12px 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-primary {
+    background: var(--green);
+    color: #000;
+    font-weight: 700;
+  }
+
+  .btn-primary:hover { background: #4dd864; transform: translateY(-1px); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .btn-ghost:hover { border-color: var(--muted); color: var(--text); }
+
+  .hero-stats {
+    position: absolute;
+    right: 60px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .stat {
+    text-align: right;
+  }
+
+  .stat-num {
+    font-family: var(--display);
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--green);
+    display: block;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* ── TERMINAL TICKER ─────────────────────────── */
+  .ticker {
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+    overflow: hidden;
+    white-space: nowrap;
+    background: var(--bg2);
+  }
+
+  .ticker-inner {
+    display: inline-block;
+    animation: scroll 30s linear infinite;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .ticker-inner span { margin: 0 40px; }
+  .ticker-inner .hi { color: var(--green); }
+
+  @keyframes scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  /* ── SECTION ─────────────────────────────────── */
+  .section {
+    padding: 80px 60px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-label {
+    font-size: 11px;
+    color: var(--green);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 40px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-label::before {
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 1px;
+    background: var(--green);
+  }
+
+  /* ── TASK CARDS ──────────────────────────────── */
+  .tasks-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  .task-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    transition: border-color 0.2s;
+    cursor: pointer;
+  }
+
+  .task-card:hover { border-color: var(--green); }
+  .task-card.active { border-color: var(--green); background: #0d1a0f; }
+
+  .task-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+
+  .task-title {
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  .badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .badge-easy { background: var(--green-dim); color: var(--green); }
+  .badge-medium { background: var(--amber-dim); color: var(--amber); }
+  .badge-hard { background: var(--red-dim); color: var(--red); }
+
+  .task-desc {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 20px;
+  }
+
+  .task-bugs {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .bug-pill {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: var(--bg3);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    display: inline-block;
+    width: fit-content;
+  }
+
+  .task-footer {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* ── PLAYGROUND ──────────────────────────────── */
+  .playground {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  .panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg3);
+  }
+
+  .panel-title {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .dot-green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot-amber { background: var(--amber); }
+  .dot-red { background: var(--red); }
+
+  .panel-body { padding: 20px; }
+
+  .code-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    font-size: 12px;
+    line-height: 1.7;
+    overflow-x: auto;
+    white-space: pre;
+    color: #adbac7;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .code-block .kw { color: #ff7b72; }
+  .code-block .fn { color: #d2a8ff; }
+  .code-block .str { color: #a5d6ff; }
+  .code-block .cm { color: #8b949e; }
+  .code-block .bug { background: rgba(248,81,73,0.15); border-left: 2px solid var(--red); padding-left: 4px; }
+
+  .error-box {
+    margin-top: 12px;
+    padding: 12px 16px;
+    background: rgba(248,81,73,0.08);
+    border: 1px solid rgba(248,81,73,0.3);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--red);
+  }
+
+  .error-box.hidden { display: none; }
+
+  .context-box {
+    margin-top: 12px;
+    padding: 12px 16px;
+    background: rgba(88,166,255,0.06);
+    border: 1px solid rgba(88,166,255,0.2);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--blue);
+    line-height: 1.6;
+  }
+
+  .context-box.hidden { display: none; }
+
+  /* Action panel */
+  .action-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 4px;
+  }
+
+  .action-tab {
+    flex: 1;
+    padding: 7px 10px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+
+  .action-tab.active {
+    background: var(--bg3);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .action-tab:hover:not(.active) { color: var(--text); }
+
+  .action-form { display: none; flex-direction: column; gap: 12px; }
+  .action-form.active { display: flex; }
+
+  textarea, input[type="text"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s;
+    line-height: 1.6;
+  }
+
+  textarea:focus, input[type="text"]:focus { border-color: var(--green); }
+
+  textarea { min-height: 80px; }
+
+  label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+    display: block;
+  }
+
+  .submit-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--green);
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .submit-btn:hover { background: #4dd864; }
+  .submit-btn:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+  /* Reward display */
+  .reward-display {
+    margin-top: 16px;
+    display: none;
+  }
+
+  .reward-display.visible { display: block; }
+
+  .score-bar-wrap {
+    margin-bottom: 16px;
+  }
+
+  .score-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+
+  .score-value {
+    font-family: var(--display);
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--green);
+  }
+
+  .score-bar {
+    height: 6px;
+    background: var(--bg3);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .score-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: 3px;
+    transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+    width: 0%;
+  }
+
+  .score-fill.amber { background: var(--amber); }
+  .score-fill.red { background: var(--red); }
+
+  .feedback-box {
+    padding: 12px 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 12px;
+  }
+
+  .breakdown-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .breakdown-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .breakdown-key { color: var(--muted); margin-bottom: 2px; }
+  .breakdown-val { color: var(--green); font-weight: 700; }
+
+  .done-banner {
+    padding: 14px 16px;
+    background: rgba(63,185,80,0.1);
+    border: 1px solid rgba(63,185,80,0.4);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--green);
+    text-align: center;
+    font-weight: 700;
+    display: none;
+  }
+
+  .done-banner.visible { display: block; }
+
+  /* Task selector */
+  .task-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .task-btn {
+    flex: 1;
+    padding: 10px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+
+  .task-btn:hover { border-color: var(--muted); color: var(--text); }
+  .task-btn.active { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+
+  /* Step counter */
+  .step-counter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .step-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+    transition: background 0.2s;
+  }
+
+  .step-dot.done { background: var(--green); }
+  .step-dot.current { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+
+  /* Episode log */
+  .episode-log {
+    margin-top: 16px;
+    max-height: 180px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .log-entry {
+    padding: 8px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .log-action { color: var(--blue); }
+  .log-score { font-weight: 700; }
+
+  /* ── HOW IT WORKS ────────────────────────────── */
+  .how-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2px;
+  }
+
+  .how-step {
+    padding: 32px 28px;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    position: relative;
+  }
+
+  .how-step:first-child { border-radius: 10px 0 0 10px; }
+  .how-step:last-child { border-radius: 0 10px 10px 0; }
+
+  .how-num {
+    font-family: var(--display);
+    font-size: 64px;
+    font-weight: 800;
+    color: var(--border);
+    line-height: 1;
+    margin-bottom: 16px;
+  }
+
+  .how-title {
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .how-desc {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  /* ── FOOTER ──────────────────────────────────── */
+  .footer {
+    padding: 40px 60px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .footer a { color: var(--green); text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
+
+  /* ── LOADING ─────────────────────────────────── */
+  .loading {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--border);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-left: 6px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hidden { display: none !important; }
+
+  @media (max-width: 900px) {
+    .hero { padding: 60px 24px; }
+    .hero-stats { display: none; }
+    .section { padding: 60px 24px; }
+    .tasks-grid { grid-template-columns: 1fr; }
+    .playground { grid-template-columns: 1fr; }
+    .how-grid { grid-template-columns: 1fr 1fr; }
+    .footer { flex-direction: column; gap: 12px; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="tag-line">OpenEnv · Meta x PyTorch Hackathon 2025</div>
+  <h1>AI builds code.<br><span>AI should debug it.</span></h1>
+  <p class="hero-sub">
+    <strong>DebugEnv</strong> is an open training environment for AI agents learning to find and fix real bugs — from obvious typos to silent multi-function cascades. Built for the vibe-coding era.
+  </p>
+  <div class="hero-actions">
+    <a href="#playground" class="btn btn-primary">▶ Try Live Demo</a>
+    <a href="https://github.com/SrijanAI/debugenv" target="_blank" class="btn btn-ghost">GitHub →</a>
+    <a href="/docs" target="_blank" class="btn btn-ghost">API Docs →</a>
+  </div>
+
+  <div class="hero-stats">
+    <div class="stat">
+      <span class="stat-num">3</span>
+      <span class="stat-label">Task difficulties</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">0.0→1.0</span>
+      <span class="stat-label">Shaped rewards</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">6</span>
+      <span class="stat-label">API endpoints</span>
+    </div>
+  </div>
+</section>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ticker-inner">
+    <span>step() <span class="hi">→ observation + reward + done</span></span>
+    <span>reset() <span class="hi">→ fresh episode</span></span>
+    <span>state() <span class="hi">→ current env state</span></span>
+    <span>/tasks <span class="hi">→ action schema</span></span>
+    <span>/grader <span class="hi">→ episode score</span></span>
+    <span>/baseline <span class="hi">→ reproducible scores</span></span>
+    <span>task: easy <span class="hi">→ NameError typo</span></span>
+    <span>task: medium <span class="hi">→ silent logic bug</span></span>
+    <span>task: hard <span class="hi">→ 3-bug cascade</span></span>
+    <span>step() <span class="hi">→ observation + reward + done</span></span>
+    <span>reset() <span class="hi">→ fresh episode</span></span>
+    <span>state() <span class="hi">→ current env state</span></span>
+    <span>/tasks <span class="hi">→ action schema</span></span>
+    <span>/grader <span class="hi">→ episode score</span></span>
+    <span>/baseline <span class="hi">→ reproducible scores</span></span>
+    <span>task: easy <span class="hi">→ NameError typo</span></span>
+    <span>task: medium <span class="hi">→ silent logic bug</span></span>
+    <span>task: hard <span class="hi">→ 3-bug cascade</span></span>
+  </div>
+</div>
+
+<!-- TASKS -->
+<section class="section">
+  <div class="section-label">The environment</div>
+  <div class="tasks-grid">
+    <div class="task-card" onclick="selectTask('easy')">
+      <div class="task-card-header">
+        <div class="task-title">Easy</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p class="task-desc">A function crashes with a clear error message. Agent must find the typo causing a NameError and fix it. Classic beginner mistake, clear signal.</p>
+      <div class="task-bugs">
+        <span class="bug-pill">NameError — variable typo</span>
+        <span class="bug-pill">Max 5 steps</span>
+      </div>
+      <div class="task-footer">
+        <span>Partial reward at diagnosis</span>
+        <span>Full on correct fix</span>
+      </div>
+    </div>
+
+    <div class="task-card" onclick="selectTask('medium')">
+      <div class="task-card-header">
+        <div class="task-title">Medium</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p class="task-desc">No exception raised. Code runs silently but returns wrong results. Agent must trace through logic to find a subtle comparison operator bug.</p>
+      <div class="task-bugs">
+        <span class="bug-pill">Silent logic bug</span>
+        <span class="bug-pill">No stack trace given</span>
+        <span class="bug-pill">Max 8 steps</span>
+      </div>
+      <div class="task-footer">
+        <span>Reward for identifying silent</span>
+        <span>5/5 tests must pass</span>
+      </div>
+    </div>
+
+    <div class="task-card" onclick="selectTask('hard')">
+      <div class="task-card-header">
+        <div class="task-title">Hard</div>
+        <span class="badge badge-hard">Hard</span>
+      </div>
+      <p class="task-desc">Three interacting bugs in an e-commerce cart. Mutable default argument, integer division truncation, off-by-one boundary. No hints. Fixing 2/3 is not enough.</p>
+      <div class="task-bugs">
+        <span class="bug-pill">Mutable default argument</span>
+        <span class="bug-pill">Integer division</span>
+        <span class="bug-pill">Boundary condition</span>
+        <span class="bug-pill">Max 12 steps</span>
+      </div>
+      <div class="task-footer">
+        <span>Partial score per bug found</span>
+        <span>All 4 boundary tests</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PLAYGROUND -->
+<section class="section" id="playground">
+  <div class="section-label">Live playground</div>
+
+  <div class="task-selector">
+    <button class="task-btn active" id="btn-easy" onclick="selectTask('easy')">easy</button>
+    <button class="task-btn" id="btn-medium" onclick="selectTask('medium')">medium</button>
+    <button class="task-btn" id="btn-hard" onclick="selectTask('hard')">hard</button>
+  </div>
+
+  <div class="playground">
+
+    <!-- LEFT: Code panel -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-amber"></span>
+            <span class="dot dot-green"></span>
+            &nbsp; buggy_code.py
+          </div>
+          <div class="step-counter" id="step-counter">
+            <span class="step-dot current" id="sd0"></span>
+            <span class="step-dot" id="sd1"></span>
+            <span class="step-dot" id="sd2"></span>
+            <span class="step-dot" id="sd3"></span>
+            <span class="step-dot" id="sd4"></span>
+            <span style="margin-left:4px">step <span id="step-num">0</span></span>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="code-block" id="code-display">
+            <span class="cm"># Click Reset to load a task</span>
+          </div>
+          <div class="error-box hidden" id="error-display"></div>
+          <div class="context-box hidden" id="context-display"></div>
+        </div>
+      </div>
+
+      <!-- Episode log -->
+      <div style="margin-top:16px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;letter-spacing:0.1em;text-transform:uppercase">Episode log</div>
+        <div class="episode-log" id="episode-log">
+          <div class="log-entry" style="color:var(--muted);font-style:italic">No actions yet — reset to start</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Action panel -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="dot dot-green" id="status-dot"></span>
+            &nbsp; agent actions
+          </div>
+          <button class="btn btn-ghost" style="font-size:11px;padding:6px 14px" onclick="resetEnv()" id="reset-btn">
+            ↺ Reset
+          </button>
+        </div>
+        <div class="panel-body">
+
+          <div class="action-tabs">
+            <button class="action-tab active" onclick="switchTab('diagnose')">diagnose</button>
+            <button class="action-tab" onclick="switchTab('suggest_fix')">suggest fix</button>
+            <button class="action-tab" onclick="switchTab('submit_solution')">submit</button>
+            <button class="action-tab" onclick="switchTab('request_more_info')">ask</button>
+          </div>
+
+          <!-- Diagnose form -->
+          <div class="action-form active" id="form-diagnose">
+            <div>
+              <label>diagnosis</label>
+              <textarea id="input-diagnosis" placeholder="Describe what you think the bug is and why..."></textarea>
+            </div>
+            <div>
+              <label>reasoning</label>
+              <textarea id="input-reasoning-d" placeholder="Your reasoning..." style="min-height:60px"></textarea>
+            </div>
+            <button class="submit-btn" onclick="submitAction('diagnose')" id="submit-diagnose">
+              Send diagnosis →
+            </button>
+          </div>
+
+          <!-- Suggest fix form -->
+          <div class="action-form" id="form-suggest_fix">
+            <div>
+              <label>suggested fix (code snippet)</label>
+              <textarea id="input-suggested_fix" placeholder="Paste the fixed code snippet..." style="min-height:120px;font-family:monospace"></textarea>
+            </div>
+            <button class="submit-btn" onclick="submitAction('suggest_fix')">
+              Send fix suggestion →
+            </button>
+          </div>
+
+          <!-- Submit solution form -->
+          <div class="action-form" id="form-submit_solution">
+            <div>
+              <label>final solution (complete corrected code)</label>
+              <textarea id="input-final_solution" placeholder="Paste the complete corrected code..." style="min-height:180px;font-family:monospace"></textarea>
+            </div>
+            <button class="submit-btn" style="background:var(--amber);color:#000" onclick="submitAction('submit_solution')">
+              Submit final solution →
+            </button>
+          </div>
+
+          <!-- Ask form -->
+          <div class="action-form" id="form-request_more_info">
+            <div>
+              <label>clarifying question</label>
+              <textarea id="input-question" placeholder="What additional context do you need?"></textarea>
+            </div>
+            <button class="submit-btn" style="background:var(--blue);color:#000" onclick="submitAction('request_more_info')">
+              Ask question →
+            </button>
+          </div>
+
+          <!-- Reward display -->
+          <div class="reward-display" id="reward-display">
+            <div class="score-bar-wrap">
+              <div class="score-header">
+                <span style="color:var(--muted);font-size:12px">step reward</span>
+                <span class="score-value" id="score-value">0.0</span>
+              </div>
+              <div class="score-bar">
+                <div class="score-fill" id="score-fill"></div>
+              </div>
+            </div>
+            <div class="feedback-box" id="feedback-box"></div>
+            <div class="breakdown-grid" id="breakdown-grid"></div>
+            <div class="done-banner" id="done-banner">✓ Episode complete!</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section">
+  <div class="section-label">How it works</div>
+  <div class="how-grid">
+    <div class="how-step">
+      <div class="how-num">01</div>
+      <div class="how-title">reset()</div>
+      <div class="how-desc">Call reset() with a task ID. Get back an Observation — buggy code, error message, stack trace, context. Episode begins.</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">02</div>
+      <div class="how-title">step(action)</div>
+      <div class="how-desc">Agent takes an Action — diagnose, suggest fix, ask for info, or submit solution. Environment returns reward + feedback immediately.</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">03</div>
+      <div class="how-title">reward signal</div>
+      <div class="how-desc">Partial rewards at every step. Right diagnosis = +score. Correct fix = +score. All tests pass = full score. Wrong direction = 0.</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">04</div>
+      <div class="how-title">grade()</div>
+      <div class="how-desc">Final score via /grader. Deterministic — same actions always produce same score. Run /baseline to benchmark any LLM agent.</div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div>
+    <strong>DebugEnv</strong> — OpenEnv submission · Meta x PyTorch Hackathon 2025
+  </div>
+  <div style="display:flex;gap:24px">
+    <a href="https://github.com/SrijanAI/debugenv" target="_blank">GitHub</a>
+    <a href="/docs" target="_blank">API Docs</a>
+    <a href="/tasks">Tasks JSON</a>
+    <a href="/baseline" onclick="event.preventDefault();triggerBaseline()">Run Baseline</a>
+  </div>
+</footer>
+
+<script>
+  const BASE = '';  // Same origin
+  let currentTask = 'easy';
+  let currentStep = 0;
+  let episodeDone = false;
+  let activeTab = 'diagnose';
+
+  const CODE_PLACEHOLDER = {
+    easy: null,
+    medium: null,
+    hard: null
+  };
+
+  async function resetEnv() {
+    const btn = document.getElementById('reset-btn');
+    btn.innerHTML = '↺ Reset <span class="loading"></span>';
+    btn.disabled = true;
+    episodeDone = false;
+
+    try {
+      const r = await fetch(`${BASE}/reset?task_id=${currentTask}`, { method: 'POST' });
+      const obs = await r.json();
+
+      // Show code
+      document.getElementById('code-display').innerHTML = highlightCode(obs.code_snippet);
+
+      // Show error
+      const errBox = document.getElementById('error-display');
+      if (obs.error_message) {
+        errBox.textContent = '$ ' + obs.error_message;
+        errBox.classList.remove('hidden');
+      } else {
+        errBox.classList.add('hidden');
+      }
+
+      // Show context
+      const ctxBox = document.getElementById('context-display');
+      if (obs.context) {
+        ctxBox.textContent = obs.context;
+        ctxBox.classList.remove('hidden');
+      } else {
+        ctxBox.classList.add('hidden');
+      }
+
+      currentStep = 0;
+      updateStepDots(0, obs.max_steps);
+      document.getElementById('step-num').textContent = currentStep;
+
+      // Clear log
+      document.getElementById('episode-log').innerHTML =
+        '<div class="log-entry" style="color:var(--muted);font-style:italic">Episode started — take an action</div>';
+
+      // Hide reward
+      document.getElementById('reward-display').classList.remove('visible');
+      document.getElementById('done-banner').classList.remove('visible');
+      document.getElementById('score-fill').style.width = '0%';
+
+    } catch(e) {
+      console.error(e);
+    }
+
+    btn.innerHTML = '↺ Reset';
+    btn.disabled = false;
+  }
+
+  async function submitAction(actionType) {
+    if (episodeDone) return;
+
+    const action = { action_type: actionType };
+
+    if (actionType === 'diagnose') {
+      action.diagnosis = document.getElementById('input-diagnosis').value;
+      action.reasoning = document.getElementById('input-reasoning-d').value;
+    } else if (actionType === 'suggest_fix') {
+      action.suggested_fix = document.getElementById('input-suggested_fix').value;
+    } else if (actionType === 'submit_solution') {
+      action.final_solution = document.getElementById('input-final_solution').value;
+    } else if (actionType === 'request_more_info') {
+      action.question = document.getElementById('input-question').value;
+    }
+
+    const btn = document.querySelector(`#form-${actionType} .submit-btn`);
+    const origText = btn.textContent;
+    btn.innerHTML = 'Sending <span class="loading"></span>';
+    btn.disabled = true;
+
+    try {
+      const r = await fetch(`${BASE}/step?task_id=${currentTask}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(action)
+      });
+      const result = await r.json();
+      const reward = result.reward;
+
+      currentStep++;
+      document.getElementById('step-num').textContent = currentStep;
+      updateStepDots(currentStep, result.observation.max_steps);
+
+      // Show reward
+      const scoreVal = reward.value;
+      document.getElementById('score-value').textContent = scoreVal.toFixed(3);
+      const fill = document.getElementById('score-fill');
+      fill.style.width = (scoreVal * 100) + '%';
+      fill.className = 'score-fill' + (scoreVal >= 0.7 ? '' : scoreVal >= 0.3 ? ' amber' : ' red');
+
+      document.getElementById('feedback-box').textContent = reward.feedback;
+
+      // Breakdown
+      const bg = document.getElementById('breakdown-grid');
+      bg.innerHTML = '';
+      for (const [k, v] of Object.entries(reward.breakdown || {})) {
+        if (typeof v === 'object') continue;
+        bg.innerHTML += `<div class="breakdown-item"><div class="breakdown-key">${k}</div><div class="breakdown-val">${v}</div></div>`;
+      }
+
+      document.getElementById('reward-display').classList.add('visible');
+
+      // Add to log
+      const log = document.getElementById('episode-log');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `<span class="log-action">${actionType}</span><span class="log-score" style="color:${scoreVal>=0.5?'var(--green)':scoreVal>0?'var(--amber)':'var(--red)'}">${scoreVal.toFixed(3)}</span>`;
+      log.appendChild(entry);
+      log.scrollTop = log.scrollHeight;
+
+      if (result.done) {
+        episodeDone = true;
+        document.getElementById('done-banner').classList.add('visible');
+      }
+
+    } catch(e) {
+      console.error(e);
+    }
+
+    btn.textContent = origText;
+    btn.disabled = false;
+  }
+
+  function selectTask(task) {
+    currentTask = task;
+    ['easy','medium','hard'].forEach(t => {
+      document.getElementById(`btn-${t}`).classList.toggle('active', t === task);
+    });
+    // Auto reset when switching
+    resetEnv();
+  }
+
+  function switchTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll('.action-tab').forEach((el, i) => {
+      const tabs = ['diagnose','suggest_fix','submit_solution','request_more_info'];
+      el.classList.toggle('active', tabs[i] === tab);
+    });
+    document.querySelectorAll('.action-form').forEach(f => f.classList.remove('active'));
+    document.getElementById(`form-${tab}`).classList.add('active');
+  }
+
+  function updateStepDots(current, max) {
+    for (let i = 0; i < 5; i++) {
+      const dot = document.getElementById(`sd${i}`);
+      if (!dot) continue;
+      dot.className = 'step-dot' + (i < current ? ' done' : i === current ? ' current' : '');
+    }
+  }
+
+  function highlightCode(code) {
+    return code
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/(def |class |return |import |from |if |elif |else:|for |while |try:|except |raise |with |as |and |or |not |in |is )/g, '<span class="kw">$1</span>')
+      .replace(/"""[\s\S]*?"""/g, s => `<span class="cm">${s}</span>`)
+      .replace(/#.*/g, s => `<span class="cm">${s}</span>`)
+      .replace(/"([^"]*)"/g, '<span class="str">"$1"</span>')
+      .replace(/'([^']*)'/g, "<span class='str'>'$1'</span>");
+  }
+
+  async function triggerBaseline() {
+    const r = await fetch(`${BASE}/baseline`, { method: 'POST' });
+    const data = await r.json();
+    alert(`Baseline scores:\n${Object.entries(data.baseline_scores).map(([k,v])=>`${k}: ${v.score}`).join('\n')}\n\nAverage: ${data.average}`);
+  }
+
+  // Init
+  window.addEventListener('load', () => resetEnv());
+</script>
+
+</body>
+</html>

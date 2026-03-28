@@ -1,11 +1,15 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 from typing import Dict, Any
 import sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from environment import DebugEnv, Action, ActionType
+
+STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 
 app = FastAPI(
     title="DebugEnv",
@@ -26,8 +30,16 @@ def _validate_task(task_id: str):
     if task_id not in ["easy", "medium", "hard"]:
         raise HTTPException(400, f"task_id must be one of ['easy', 'medium', 'hard']")
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def root():
+    index = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(index):
+        with open(index, "r") as f:
+            return f.read()
+    return HTMLResponse("<h1>DebugEnv</h1><p>UI not found.</p>")
+
+@app.get("/info")
+def info():
     return {
         "name": "DebugEnv",
         "description": "Train AI agents to debug real-world code errors.",
@@ -89,7 +101,6 @@ def baseline():
     for task_id in ["easy", "medium", "hard"]:
         env = DebugEnv(task_id=task_id)
         obs = env.reset()
-
         if task_id == "easy":
             diagnosis = "NameError caused by typo 'discont_percent' instead of 'discount_percent'"
             solution = obs.code_snippet.replace("discont_percent", "discount_percent")
@@ -127,7 +138,6 @@ def calculate_total(cart, customer_type, tax_rate):
     total = discounted + tax
     return round(total, 2)
 """
-
         env.step(Action(action_type=ActionType.DIAGNOSE, diagnosis=diagnosis, reasoning=diagnosis))
         result = env.step(Action(action_type=ActionType.SUBMIT_SOLUTION, final_solution=solution, reasoning="Applying fix"))
         results[task_id] = {"score": result.reward.value, "task_id": task_id}
