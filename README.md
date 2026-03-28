@@ -1,4 +1,14 @@
-﻿# DebugEnv
+﻿---
+title: DebugEnv
+colorFrom: blue
+colorTo: purple
+sdk: docker
+pinned: false
+tags:
+  - openenv
+---
+
+# DebugEnv
 
 > An OpenEnv-compliant environment for training and evaluating AI agents on real-world code debugging tasks.
 
@@ -152,4 +162,5 @@ This ensures agents can learn from partial progress, not just end-of-episode out
 ## Built for the AI Vibe-Coding Era
 
 The hard task specifically tests whether agents can find **silent bugs** â€” the kind AI code generators produce most often. A bug that doesn't crash but silently returns wrong results is far more dangerous in production than one that throws an exception. DebugEnv trains agents to catch both.
+
 
