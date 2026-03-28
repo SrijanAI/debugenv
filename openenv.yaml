@@ -1,0 +1,75 @@
+name: DebugEnv
+version: "1.0.0"
+description: >
+  An OpenEnv-compliant environment for training and evaluating AI agents
+  on real-world code debugging tasks. Covers easy (NameError typo),
+  medium (silent logic bug), and hard (multi-bug cascade) difficulty levels.
+
+tags:
+  - openenv
+  - debugging
+  - code-review
+  - software-engineering
+
+tasks:
+  - id: easy
+    difficulty: easy
+    description: Single obvious NameError caused by a variable typo
+    max_steps: 5
+    score_range: [0.0, 1.0]
+
+  - id: medium
+    difficulty: medium
+    description: Silent logic bug — wrong comparison operator, no traceback
+    max_steps: 8
+    score_range: [0.0, 1.0]
+
+  - id: hard
+    difficulty: hard
+    description: Two-bug cascade — date format crash + silent case-sensitivity bug
+    max_steps: 12
+    score_range: [0.0, 1.0]
+
+observation_space:
+  type: object
+  fields:
+    - task_id: string
+    - difficulty: enum[easy, medium, hard]
+    - code_snippet: string
+    - error_message: string | null
+    - stack_trace: string | null
+    - language: string
+    - context: string | null
+    - available_actions: list[string]
+    - step_number: integer
+    - max_steps: integer
+    - previous_attempts: list[string]
+
+action_space:
+  type: object
+  fields:
+    - action_type: enum[diagnose, suggest_fix, request_more_info, submit_solution]
+    - diagnosis: string | null
+    - suggested_fix: string | null
+    - question: string | null
+    - final_solution: string | null
+    - reasoning: string | null
+
+reward:
+  type: float
+  range: [0.0, 1.0]
+  shaped: true
+  description: Partial rewards at each step. Final score from submit_solution.
+
+endpoints:
+  reset: POST /reset?task_id={easy|medium|hard}
+  step: POST /step?task_id={easy|medium|hard}
+  state: GET /state?task_id={easy|medium|hard}
+  tasks: GET /tasks
+  grader: POST /grader?task_id={easy|medium|hard}
+  baseline: POST /baseline
+
+language: python
+framework: fastapi
+docker: true
+hf_space: true
