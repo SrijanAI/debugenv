@@ -828,8 +828,11 @@
 
 <!-- PLAYGROUND -->
 <section class="section" id="playground">
-  <div class="section-label">Live playground</div>
+  <div class="section-label">Agent simulation playground</div>
 
+  <div style="margin-bottom:20px;padding:12px 16px;background:rgba(63,185,80,0.06);border:1px solid rgba(63,185,80,0.2);border-radius:8px;font-size:12px;color:#3fb950;line-height:1.7">
+    <strong>You are simulating an AI agent.</strong> In production, an LLM like GPT-4 calls these API endpoints automatically. Here you play the agent manually — pick a task, read the buggy code, take actions, and see the reward signal the agent would receive.
+  </div>
   <div class="task-selector">
     <button class="task-btn active" id="btn-easy" onclick="selectTask('easy')">easy</button>
     <button class="task-btn" id="btn-medium" onclick="selectTask('medium')">medium</button>
@@ -870,7 +873,7 @@
       <div style="margin-top:16px">
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;letter-spacing:0.1em;text-transform:uppercase">Episode log</div>
         <div class="episode-log" id="episode-log">
-          <div class="log-entry" style="color:var(--muted);font-style:italic">No actions yet — reset to start</div>
+          <div class="log-entry" style="color:var(--muted);font-style:italic">No actions yet — you are the agent. Reset to start an episode.</div>
         </div>
       </div>
     </div>
@@ -881,7 +884,7 @@
         <div class="panel-header">
           <div class="panel-title">
             <span class="dot dot-green" id="status-dot"></span>
-            &nbsp; agent actions
+            &nbsp; simulate agent actions
           </div>
           <button class="btn btn-ghost" style="font-size:11px;padding:6px 14px" onclick="resetEnv()" id="reset-btn">
             ↺ Reset
