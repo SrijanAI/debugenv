@@ -117,10 +117,10 @@ python baseline/inference.py
 
 | Task | Score | Model |
 |------|-------|-------|
-| easy | 0.90 | gpt-4o-mini |
-| medium | 0.65 | gpt-4o-mini |
-| hard | 0.45 | gpt-4o-mini |
-| **average** | **0.67** | gpt-4o-mini |
+| easy | 1.000 | gpt-4o-mini |
+| medium | 1.000 | gpt-4o-mini |
+| hard | 0.600 | gpt-4o-mini |
+| **average** | **0.867** | gpt-4o-mini |
 
 ---
 
